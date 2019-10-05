@@ -1,0 +1,272 @@
+---
+title: "via_and_EDA"
+author: "Yuqi Miao"
+date: "9/26/2019"
+output: github_document
+---
+```{r}
+library(tidyverse)
+library(ggridges)
+library(hexbin)
+library(patchwork)
+```
+
+```{r, cache=TRUE}
+weather_df = 
+  rnoaa::meteo_pull_monitors(c("USW00094728", "USC00519397", "USS0023B17S"),
+                      var = c("PRCP", "TMIN", "TMAX"), 
+                      date_min = "2017-01-01",
+                      date_max = "2017-12-31") %>%
+  mutate(
+    name = recode(id, USW00094728 = "CentralPark_NY", 
+                      USC00519397 = "Waikiki_HA",
+                      USS0023B17S = "Waterhole_WA"),
+    tmin = tmin / 10,
+    tmax = tmax / 10,
+    month = lubridate::floor_date(date, unit = "month")) %>%
+  select(name, id, everything())
+
+```
+
+```{r}
+ggplot(weather_df, aes(x = tmin, y = tmax))+
+    geom_density2d()
+```
+
+
+
+```{r}
+ggplot(weather_df, aes(x = tmax, fill = name)) + 
+  geom_density(alpha = .4, adjust = .5, color = "blue")+
+  geom_rug()
+```
+
+## vis 2
+
+### labels
+```{r}
+weather_df %>%
+  ggplot(aes(x = tmin, y = tmax, color = name))+
+  geom_point(alpha = 0.5)+
+  labs(
+    title = "Temp plot",
+    x = "min T(C)",
+    y = "max T(C) -- sqrt transformation"
+    ) +
+  scale_x_continuous(         ### manipulate the ticks
+      breaks = c(-15,0,15),
+      labels = c("-15C", "0C","15C")
+    ) +
+  scale_y_continuous(         ### using scale_y_sqrt
+    trans = "sqrt"           
+  )
+  
+```
+
+
+
+### color
+```{r}
+weather_df %>%
+  ggplot(aes(x = tmin, y = tmax, color = name))+
+  geom_point(alpha = 0.5)+
+  labs(
+    title = "Temp plot",
+    x = "min T(C)",
+    y = "max T(C) -- sqrt transformation"
+    ) +
+  scale_color_hue(            ### not always do, change merely by hand
+    name = "Weather station", ### the name of color legend
+    h = c(0,200)
+  )
+```
+
+### virdirs package
+
+
+
+
+```{r}
+ggbase <-                                         ### add a baseplot to add things
+  weather_df %>%
+  ggplot(aes(x = tmin, y = tmax, color = name))+
+  geom_point(alpha = 0.5)+
+  labs(
+    title = "Temp plot",
+    x = "min T(C)",
+    y = "max T(C) -- sqrt transformation"
+    ) + 
+  viridis::scale_color_viridis(
+    name = "Location", 
+    discrete = TRUE
+  )
+
+ggbase
+```
+
+
+## themes
+
+```{r}
+ggbase +                      ## order mattered!!
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+ggbase +
+  theme(legend.position = "bottom") + ## order mattered!!
+  theme_minimal()
+ 
+```
+
+
+
+## more than one dataset
+
+```{r}
+central_park = 
+  weather_df %>% 
+  filter(name == "CentralPark_NY")
+
+waikiki = 
+  weather_df %>% 
+  filter(name == "Waikiki_HA")
+
+ggplot(data = waikiki, aes(x = date, y = tmax, color = name)) + 
+  geom_point() + 
+  geom_line(data = central_park)                  ### specify the geom_specific dataset
+```
+
+
+(brief aside about colors)
+```{r}
+waikiki %>%
+  ggplot(aes(x = date, y  = tmax))+
+  geom_point(color = "blue")
+```
+
+## patch work
+
+```{r}
+tmax_tmin_p = 
+  weather_df %>% 
+  ggplot(aes(x = tmax, y = tmin, color = name)) + 
+  geom_point(alpha = .5) +
+  theme(legend.position = "none")
+
+prcp_dens_p = 
+  weather_df %>% 
+  filter(prcp > 0) %>% 
+  ggplot(aes(x = prcp, fill = name)) + 
+  geom_density(alpha = .5) + 
+  theme(legend.position = "none")
+
+tmax_date_p = 
+  weather_df %>% 
+  ggplot(aes(x = date, y = tmax, color = name)) + 
+  geom_point(alpha = .5) +
+  geom_smooth(se = FALSE) + 
+  theme(legend.position = "bottom")
+
+(tmax_tmin_p + prcp_dens_p) / tmax_date_p  ## patchwork！
+
+```
+
+## data
+
+```{r}
+weather_df %>%
+  mutate(name = forcats::fct_relevel(name, c("Waikiki_HA", "CentralPark_NY", "Waterhole_WA"))) %>% 
+  ggplot(aes(x = name, y = tmax)) + 
+  geom_violin(aes(fill = name), color = "blue", alpha = .5) + 
+  theme(legend.position = "bottom")
+```
+
+
+
+
+### reorder
+```{r}
+weather_df %>%
+  mutate(name = forcats::fct_reorder(name, tmax)) %>% ### use second variable to assign the plotting order.
+  ggplot(aes(x = name, y = tmax)) +  ## to change the layer order, change the dataframe arrange order!
+  geom_violin(aes(fill = name), color = "blue", alpha = .5) + 
+  theme(legend.position = "bottom")
+```
+
+
+```{r}
+weather_df %>%
+  select(name, tmax, tmin) %>% 
+  pivot_longer(
+    tmax:tmin,
+    names_to = "observation", 
+    values_to = "temp") %>% 
+  ggplot(aes(x = temp, fill = observation)) +
+  geom_density(alpha = .5) + 
+  facet_grid(~name) + 
+  viridis::scale_fill_viridis(discrete = TRUE)
+```
+
+
+## group_by
+```{r}
+weather_df %>% 
+  group_by(name,month) %>% 
+  summarise(n_obs = n())
+```
+
+```{r}
+weather_df %>%
+  pull(month) %>% 
+  table
+
+```
+
+
+
+## (2x2 tables)
+
+## General summaries
+
+```{r}
+weather_df %>%
+  group_by(month) %>%
+  summarize(
+    mean_tmax = mean(tmax),
+    mean_prec = mean(prcp, na.rm = TRUE),
+    median_tmax = median(tmax),
+    sd_tmax = sd(tmax))
+
+```
+
+
+## Grouped mutate
+```{r}
+weather_df %>%
+  group_by(name) %>%
+  mutate(centered_tmax = tmax - mean(tmax)) %>% 
+  ggplot(aes(x = date, y = centered_tmax, color = name)) + 
+    geom_point() 
+
+```
+
+
+## Window functions
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
