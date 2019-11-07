@@ -55,7 +55,8 @@ weather_df %>%
     ) +
   scale_x_continuous(         ### manipulate the ticks
       breaks = c(-15,0,15),
-      labels = c("-15C", "0C","15C")
+      labels = c("-15C", "0C","15C"),
+      limits = c(-20,30)
     ) +
   scale_y_continuous(         ### using scale_y_sqrt
     trans = "sqrt"           
