@@ -9,6 +9,7 @@ library(tidyverse)
 library(ggridges)
 library(hexbin)
 library(patchwork)
+library(ggjoy)
 ```
 
 ```{r, cache=TRUE}
@@ -25,21 +26,102 @@ weather_df =
     tmax = tmax / 10,
     month = lubridate::floor_date(date, unit = "month")) %>%
   select(name, id, everything())
-
+skimr::skim(weather_df)
 ```
 
 ```{r}
 ggplot(weather_df, aes(x = tmin, y = tmax))+
     geom_density2d()
+## first set the canvas and dataset, then draw the map
+plot_back = ggplot(weather_df,aes(x = tmin, y = tmax))
+plot_back+geom_density2d(aes(color = name),alpha = 0.5)
+## two different ways to show two dimensional density plot.
+plot_back+geom_bin2d(aes(fill = name))
+plot_back+geom_hex()
 ```
 
+## basic plots
+
+```{r}
+plot_back = ggplot(weather_df,aes(x = tmax, y = tmin, color = name))
+
+plot_back + 
+  geom_point(alpha = 0.1)+
+  geom_smooth()+
+  facet_grid(.~name)
+```
+
+## distinguish arguements in or out aes()
+
+```{r}
+ggplot(weather_df) + geom_point(aes(x = tmin, y = tmax, color = "blue")) ## creating a variable that has value blue everywhere.
+ggplot(weather_df) + geom_point(aes(x = tmin, y = tmax),color = "blue") ## set color as blue by hand.
+```
+
+## univariate plot
+
+Sometimes we need to know the distribution of the variable 
+---- using histogram, density and boxplot. 
 
 
 ```{r}
-ggplot(weather_df, aes(x = tmax, fill = name)) + 
-  geom_density(alpha = .4, adjust = .5, color = "blue")+
-  geom_rug()
+p = ggplot(weather_df)
 ```
+
+```{r}
+## histogram
+
+p+geom_histogram(aes(x = tmin,fill = name), position = "dodge")
+p+geom_histogram(aes(x = tmin, fill = name), position = "stack")
+```
+
+
+```{r}
+## density plot
+ggplot(weather_df, aes(x = tmax, fill = name)) + 
+  geom_density(alpha = .4, adjust = .5, color = "blue")+ 
+  ## adjust is used to adjust the smoothing degree of the curve similar to bin_width.
+  geom_rug()
+
+## to show the density plot of multiple variables
+
+### violin plot with error bar
+violin_plot = ggplot(weather_df, aes(x = name, y = tmax))+
+  geom_violin(aes(fill = name),alpha = 0.5, color = "blue") +
+  stat_summary(fun.y = mean,geom = "point", color = "darkblue")+
+  stat_summary(fun.ymin = function(y){mean(y)-sd(y)},fun.ymax = function(y){mean(y)+sd(y)}, geom = "errorbar", color = "darkblue")
+violin_plot
+## rotate: ggjoy::geom_joy or ggridges::geom_density_ridges()
+density_plot = 
+  ggplot(weather_df, aes(x = tmin, y = name, color = name)) +
+  geom_joy(scale = 0.5)
+density_plot
+
+```
+
+## reproducible export
+
+### save
+still with problem in mac, no clue to the device problems.
+```{r}
+# dev.off()
+# dev.set(3)
+# ggsave("density plot by names", density_plot,width = 8, height = 5)
+# ggsave("violin plot with error bar", violin_plot, width = 8, height = 5)
+```
+
+## embedding plots
+
+set in the front of all chunks.
+
+```{r}
+knitr::opts_chunk$set(
+  fig.width = 6,
+  fig.asp = 0.6,
+  out.width = "90%"
+)
+```
+
 
 ## vis 2
 
@@ -83,8 +165,6 @@ weather_df %>%
 ```
 
 ### virdirs package
-
-
 
 
 ```{r}
