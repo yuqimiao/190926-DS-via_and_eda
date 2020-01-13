@@ -125,6 +125,10 @@ knitr::opts_chunk$set(
 
 ## vis 2
 
+```{r}
+library(patchwork)
+```
+
 ### labels
 ```{r}
 weather_df %>%
@@ -135,13 +139,16 @@ weather_df %>%
     x = "min T(C)",
     y = "max T(C) -- sqrt transformation"
     ) +
-  scale_x_continuous(         ### manipulate the ticks
-      breaks = c(-15,0,15),
-      labels = c("-15C", "0C","15C"),
-      limits = c(-20,30)
+  scale_x_continuous(         ### manipulate the continuous variable ticks
+      breaks = c(-15,0,15), ## set the position of ticks
+      labels = c("-15C", "0C","15C"), ## set the labels of ticks
+      limits = c(-20,20) ## set the range of the axis
     ) +
-  scale_y_continuous(         ### using scale_y_sqrt
-    trans = "sqrt"           
+  scale_y_continuous(         ### or using scale_y_sqrt
+    trans = "sqrt",        ## using this to draw transformed variables. 
+    position = "right",
+    breaks = seq(0,40,by = 10),
+    limits = c(0,40)
   )
   
 ```
@@ -149,6 +156,7 @@ weather_df %>%
 
 
 ### color
+
 ```{r}
 weather_df %>%
   ggplot(aes(x = tmin, y = tmax, color = name))+
@@ -160,7 +168,7 @@ weather_df %>%
     ) +
   scale_color_hue(            ### not always do, change merely by hand
     name = "Weather station", ### the name of color legend
-    h = c(0,200)
+    h = c(100,300)           ### control the range of color
   )
 ```
 
@@ -179,17 +187,27 @@ ggbase <-                                         ### add a baseplot to add thin
     ) + 
   viridis::scale_color_viridis(
     name = "Location", 
-    discrete = TRUE
+    discrete = TRUE  ## set to discrete variables  
   )
 
 ggbase
+
+ggbase_2 <- 
+  weather_df %>% 
+  ggplot(aes(x = tmin,fill = name)) +
+  geom_histogram()+
+  viridis::scale_fill_viridis(
+    name = "location",
+    discrete = TRUE
+  )
+ggbase_2
 ```
 
 
-## themes
+## legend position
 
 ```{r}
-ggbase +                      ## order mattered!!
+ggbase +                      ## theme setting using theme_*() will overlap the other settings, custom setting needs to be the bottome.
   theme_minimal() +
   theme(legend.position = "bottom")
 
@@ -197,8 +215,28 @@ ggbase +
   theme(legend.position = "bottom") + ## order mattered!!
   theme_minimal()
  
+## use theme(legend.position = "none") to remove the legend
 ```
 
+## update initial setting 
+
+```{r}
+knitr::opts_chunk$set(
+  fig.width = 6,
+  fig.asp = 0.6,
+  out.width = "90%"
+)
+
+options(
+  ggplot2.continuous.colour = "viridis",
+  ggplot2.continuous.fill = "viridis")
+
+scale_colour_discrete = scale_colour_viridis_d
+scale_fill_discrete = scale_fill_viridis_d
+
+theme_set(theme_bw() + theme(legend.position = "bottom"))
+
+```
 
 
 ## more than one dataset
@@ -224,6 +262,8 @@ waikiki %>%
   ggplot(aes(x = date, y  = tmax))+
   geom_point(color = "blue")
 ```
+
+when creating a summarise plot, firstly create a summary table where contains all the data we used in the overlapped complete plot. Think about the constructure and goal of the complete plot before drawing.
 
 ## patch work
 
@@ -252,7 +292,9 @@ tmax_date_p =
 
 ```
 
-## data
+## data manipulation
+
+using data manipulation to make the data structure more clear, then making plot.
 
 ```{r}
 weather_df %>%
@@ -268,25 +310,104 @@ weather_df %>%
 ### reorder
 ```{r}
 weather_df %>%
-  mutate(name = forcats::fct_reorder(name, tmax)) %>% ### use second variable to assign the plotting order.
+  drop_na() %>% 
+  mutate(name = forcats::fct_reorder(name, tmax, mean,.desc = TRUE)) %>% 
+  ## use second variable to assign the plotting order
+  ## third var to set the function to manipulate key var
   ggplot(aes(x = name, y = tmax)) +  ## to change the layer order, change the dataframe arrange order!
   geom_violin(aes(fill = name), color = "blue", alpha = .5) + 
   theme(legend.position = "bottom")
+
+weather_df %>% 
+  drop_na() %>% 
+  group_by(name) %>% 
+  summarise(median = median(tmax),mean = mean(tmax)) %>% 
+  arrange(median)
 ```
 
+After setting the goal of the plot, make new datasets to show the plots!
 
 ```{r}
 weather_df %>%
-  select(name, tmax, tmin) %>% 
-  pivot_longer(
+  select(name, tmax, tmin) %>%  ## setting the color to a factor variable
+  pivot_longer(  
     tmax:tmin,
     names_to = "observation", 
     values_to = "temp") %>% 
   ggplot(aes(x = temp, fill = observation)) +
   geom_density(alpha = .5) + 
-  facet_grid(~name) + 
-  viridis::scale_fill_viridis(discrete = TRUE)
+  facet_grid(~name)
 ```
+
+## examples
+
+1. imports and tidies the PULSE data, and creates a plot showing BDI score across visits.
+
+```{r}
+pulse_data = haven::read_sas(data_file = "data/public_pulse_data.sas7bdat") %>% 
+  janitor::clean_names() 
+pulse_visit = pulse_data %>% 
+  pivot_longer(
+    bdi_score_bl:bdi_score_12m,
+    names_to = "visit",
+    names_prefix = "bdi_score_",
+    values_to = "bdi",
+  ) %>% 
+  select(id,visit,bdi) %>% 
+  mutate(
+    visit = recode(visit,"bl"="00m"),
+    visit = forcats::fct_relevel(visit,c("00m","01m","06m","12m"))
+    )
+  
+ggplot(pulse_visit,aes(x = visit, y = bdi))+
+  geom_boxplot()
+
+
+```
+
+
+2. pup-level visulization
+
+```{r}
+pup_data = read_csv(file = "data/FAS_pups.csv", col_types = "ciiiii") %>% 
+  janitor::clean_names() %>% 
+  mutate(sex = recode(sex, "1" = "male","2" = "female"))
+
+litters = read_csv("data/FAS_litters.csv",col_types = "ccddiiii") %>% 
+  janitor::clean_names() %>% 
+  select(-pups_survive) %>% 
+  separate(col = group, into = c("dose","day_of_tx"), sep = 3) %>% 
+  mutate(
+    dose = factor(dose),
+    wt_gain = gd18_weight - gd0_weight,
+    day_of_tx = as.numeric(day_of_tx)
+  )
+  
+fas_data = left_join(pup_data, litters, by = "litter_number")
+fas_data %>% 
+  select(sex,dose, day_of_tx, pd_ears:pd_walk) %>% 
+  pivot_longer(
+    pd_ears:pd_walk,
+    names_to = "outcome",
+    values_to = "pn_days",
+    names_prefix = "pd_"
+  ) %>% 
+  drop_na() %>%
+  mutate(
+    outcome = forcats::fct_reorder(outcome,pn_days,median),
+    dose = forcats::fct_reorder(dose,pn_days,median)
+  ) %>% 
+  ggplot(aes(x = dose, y = pn_days)) +
+  geom_violin() +
+  facet_grid(day_of_tx~outcome)
+  
+    
+  
+```
+
+
+
+
 
 
 ## group_by
